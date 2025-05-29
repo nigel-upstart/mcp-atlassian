@@ -1331,6 +1331,79 @@ async def create_sprint(
 @convert_empty_defaults_to_none
 @jira_mcp.tool(tags={"jira", "write"})
 @check_write_access
+async def rank_issues(
+    ctx: Context,
+    issues: Annotated[
+        list[str],
+        Field(
+            description="List of issue keys to rank (e.g., ['PROJ-123', 'PROJ-456'])"
+        ),
+    ],
+    rank_before: Annotated[
+        str | None,
+        Field(
+            description="Issue key to rank the issues before (mutually exclusive with rank_after)",
+            default=None,
+        ),
+    ] = None,
+    rank_after: Annotated[
+        str | None,
+        Field(
+            description="Issue key to rank the issues after (mutually exclusive with rank_before)",
+            default=None,
+        ),
+    ] = None,
+    rank_custom_field_id: Annotated[
+        str | None,
+        Field(
+            description="Optional custom field ID for ranking (e.g., 'customfield_10019'). Only needed for Server/DC instances with custom rank fields.",
+            default=None,
+        ),
+    ] = None,
+) -> str:
+    """Change the rank (order) of issues in a Jira board or backlog.
+
+    Args:
+        ctx: The FastMCP context.
+        issues: List of issue keys to rank.
+        rank_before: Issue key to rank the issues before (mutually exclusive with rank_after).
+        rank_after: Issue key to rank the issues after (mutually exclusive with rank_before).
+        rank_custom_field_id: Optional custom field ID for ranking (for Server/DC instances).
+
+    Returns:
+        JSON string with the result of the operation. Possible formats:
+        - For successful ranking (204 No Content):
+          {"success": true, "message": "Successfully ranked issues...", "issues": [...], "rank_position": "..."}
+        - For partial success (207 Multi-Status):
+          {"successfulIssues": [...], "failedIssues": [{"issueKey": "...", "errors": [...]}]}
+        - For errors:
+          {"success": false, "error": "Error message", "issues": [...]}
+
+    Raises:
+        ValueError: If required parameters are missing or invalid.
+    """
+    jira = await get_jira_fetcher(ctx)
+    try:
+        result = jira.rank_issues(
+            issues=issues,
+            rank_before=rank_before,
+            rank_after=rank_after,
+            rank_custom_field_id=rank_custom_field_id,
+        )
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Error ranking issues: {str(e)}")
+        error_result = {
+            "success": False,
+            "error": str(e),
+            "issues": issues,
+        }
+        return json.dumps(error_result, indent=2, ensure_ascii=False)
+
+
+@convert_empty_defaults_to_none
+@jira_mcp.tool(tags={"jira", "write"})
+@check_write_access
 async def update_sprint(
     ctx: Context,
     sprint_id: Annotated[str, Field(description="The id of sprint (e.g., '10001')")],
