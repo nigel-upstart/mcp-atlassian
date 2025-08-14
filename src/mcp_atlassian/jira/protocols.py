@@ -3,7 +3,7 @@
 from abc import abstractmethod
 from typing import Any, Protocol, runtime_checkable
 
-from ..models.jira import JiraIssue
+from ..models.jira import JiraIssue, ProFormaForm
 from ..models.jira.search import JiraSearchResult
 
 
@@ -23,6 +23,77 @@ class AttachmentsOperationsProto(Protocol):
 
         Returns:
             A dictionary with upload results
+        """
+
+
+class FormsOperationsProto(Protocol):
+    """Protocol defining ProForma forms operations interface."""
+
+    @abstractmethod
+    def get_issue_forms(self, issue_key: str) -> list[ProFormaForm]:
+        """
+        Get all ProForma forms associated with an issue.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+
+        Returns:
+            List of ProFormaForm objects
+        """
+
+    @abstractmethod
+    def get_form_details(self, issue_key: str, form_id: str) -> ProFormaForm | None:
+        """
+        Get detailed information about a specific ProForma form.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+            form_id: The form identifier (e.g. 'i12345')
+
+        Returns:
+            ProFormaForm object or None if not found
+        """
+
+    @abstractmethod
+    def reopen_form(self, issue_key: str, form_id: str) -> dict[str, Any]:
+        """
+        Reopen a submitted ProForma form to allow editing.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+            form_id: The form identifier (e.g. 'i12345')
+
+        Returns:
+            Response data from the API
+        """
+
+    @abstractmethod
+    def submit_form(self, issue_key: str, form_id: str) -> dict[str, Any]:
+        """
+        Submit a ProForma form after making changes.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+            form_id: The form identifier (e.g. 'i12345')
+
+        Returns:
+            Response data from the API
+        """
+
+    @abstractmethod
+    def update_form_field(
+        self, issue_key: str, field_id: str, field_value: Any
+    ) -> dict[str, Any]:
+        """
+        Update a field in a ProForma form by updating the associated Jira field.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+            field_id: The Jira field ID (e.g. 'customfield_10001')
+            field_value: The new value for the field
+
+        Returns:
+            Response data from the API
         """
 
 
@@ -91,7 +162,11 @@ class EpicOperationsProto(Protocol):
 
     @abstractmethod
     def prepare_epic_fields(
-        self, fields: dict[str, Any], summary: str, kwargs: dict[str, Any]
+        self,
+        fields: dict[str, Any],
+        summary: str,
+        kwargs: dict[str, Any],
+        project_key: str = None,
     ) -> None:
         """
         Prepare epic-specific fields for issue creation.
@@ -151,6 +226,36 @@ class FieldsOperationsProto(Protocol):
         Returns:
             Dictionary mapping field names to their IDs
             (e.g., {'epic_link': 'customfield_10014', 'epic_name': 'customfield_10011'})
+        """
+
+    @abstractmethod
+    def get_required_fields(self, issue_type: str, project_key: str) -> dict[str, Any]:
+        """
+        Get required fields for creating an issue of a specific type in a project.
+
+        Args:
+            issue_type: The issue type (e.g., 'Bug', 'Story', 'Epic')
+            project_key: The project key (e.g., 'PROJ')
+
+        Returns:
+            Dictionary mapping required field names to their definitions
+        """
+
+
+@runtime_checkable
+class ProjectsOperationsProto(Protocol):
+    """Protocol defining project operations interface."""
+
+    @abstractmethod
+    def get_project_issue_types(self, project_key: str) -> list[dict[str, Any]]:
+        """
+        Get all issue types available for a project.
+
+        Args:
+            project_key: The project key
+
+        Returns:
+            List of issue type data dictionaries
         """
 
 

@@ -28,6 +28,7 @@ MANIFEST
 
 # Environments
 .env
+.env.*
 .venv
 env/
 venv/
@@ -69,8 +70,8 @@ local/
 # debug
 playground/
 
-# rules
-CLAUDE.md
-
 # cursor
 .cursor*
+
+# Claude
+.claude/

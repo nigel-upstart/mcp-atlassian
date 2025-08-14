@@ -19,7 +19,7 @@ def mock_config():
     config.url = "https://test.atlassian.net"
     config.username = "test@example.com"
     config.api_token = "test-token"
-    config.auth_type = "token"
+    config.auth_type = "pat"
     return config
 
 
@@ -166,7 +166,7 @@ def test_get_project_issues(projects_mixin: ProjectsMixin):
 
     # Verify search_issues was called, not jira.jql
     projects_mixin.search_issues.assert_called_once_with(
-        "project = TEST",
+        'project = "TEST"',
         start=0,
         limit=50,
     )
@@ -201,7 +201,7 @@ def test_get_project_issues_with_start(projects_mixin: ProjectsMixin) -> None:
 
     # Verify search_issues was called with the correct arguments
     projects_mixin.search_issues.assert_called_once_with(
-        f"project = {project_key}",
+        f'project = "{project_key}"',
         start=start_index,
         limit=5,
     )
@@ -267,28 +267,35 @@ def test_get_project_components_non_list_response(projects_mixin: ProjectsMixin)
 def test_get_project_versions(projects_mixin: ProjectsMixin, mock_versions: list[dict]):
     """Test get_project_versions method."""
     projects_mixin.jira.get_project_versions.return_value = mock_versions
-
+    # Simplified dicts should include id, name, released and archived
+    expected = [
+        {
+            "id": v["id"],
+            "name": v["name"],
+            "released": v.get("released", False),
+            "archived": v.get("archived", False),
+        }
+        for v in mock_versions
+    ]
     result = projects_mixin.get_project_versions("PROJ1")
-    assert result == mock_versions
+    assert result == expected
     projects_mixin.jira.get_project_versions.assert_called_once_with(key="PROJ1")
 
 
 def test_get_project_versions_exception(projects_mixin: ProjectsMixin):
     """Test get_project_versions method with exception."""
     projects_mixin.jira.get_project_versions.side_effect = Exception("API error")
-
     result = projects_mixin.get_project_versions("PROJ1")
     assert result == []
-    projects_mixin.jira.get_project_versions.assert_called_once()
+    projects_mixin.jira.get_project_versions.assert_called_once_with(key="PROJ1")
 
 
 def test_get_project_versions_non_list_response(projects_mixin: ProjectsMixin):
     """Test get_project_versions method with non-list response."""
     projects_mixin.jira.get_project_versions.return_value = "not a list"
-
     result = projects_mixin.get_project_versions("PROJ1")
     assert result == []
-    projects_mixin.jira.get_project_versions.assert_called_once()
+    projects_mixin.jira.get_project_versions.assert_called_once_with(key="PROJ1")
 
 
 def test_get_project_roles(
@@ -461,7 +468,21 @@ def test_get_project_issues_count(projects_mixin: ProjectsMixin):
     result = projects_mixin.get_project_issues_count("PROJ1")
     assert result == 42
     projects_mixin.jira.jql.assert_called_once_with(
-        jql="project = PROJ1", fields="key", limit=1
+        jql='project = "PROJ1"', fields="key", limit=1
+    )
+
+
+def test_get_project_issues_count__project_with_reserved_keyword(
+    projects_mixin: ProjectsMixin,
+):
+    """Test get_project_issues_count method."""
+    jql_result = {"total": 42}
+    projects_mixin.jira.jql.return_value = jql_result
+
+    result = projects_mixin.get_project_issues_count("AND")
+    assert result == 42
+    projects_mixin.jira.jql.assert_called_once_with(
+        jql='project = "AND"', fields="key", limit=1
     )
 
 
@@ -501,7 +522,7 @@ def test_get_project_issues_with_search_mixin(projects_mixin: ProjectsMixin):
     result = projects_mixin.get_project_issues("PROJ1", start=10, limit=20)
     assert result == mock_search_result
     projects_mixin.search_issues.assert_called_once_with(
-        "project = PROJ1", start=10, limit=20
+        'project = "PROJ1"', start=10, limit=20
     )
     projects_mixin.jira.jql.assert_not_called()
 
@@ -670,3 +691,58 @@ def test_get_user_accessible_projects_exception(projects_mixin: ProjectsMixin):
         assert result == []
         projects_mixin.get_all_projects.assert_called_once()
         projects_mixin.jira.get_users_with_browse_permission_to_a_project.assert_not_called()
+
+
+def test_create_project_version_minimal(projects_mixin: ProjectsMixin) -> None:
+    """Test create_project_version with only required fields."""
+    mock_response = {"id": "201", "name": "v4.0"}
+    with patch.object(
+        projects_mixin, "create_version", return_value=mock_response
+    ) as mock_create_version:
+        result = projects_mixin.create_project_version(project_key="PROJ2", name="v4.0")
+        assert result == mock_response
+        mock_create_version.assert_called_once_with(
+            project="PROJ2",
+            name="v4.0",
+            start_date=None,
+            release_date=None,
+            description=None,
+        )
+
+
+def test_create_project_version_all_fields(projects_mixin: ProjectsMixin) -> None:
+    """Test create_project_version with all fields."""
+    mock_response = {
+        "id": "202",
+        "name": "v5.0",
+        "description": "Release 5.0",
+        "startDate": "2025-08-01",
+        "releaseDate": "2025-08-15",
+    }
+    with patch.object(
+        projects_mixin, "create_version", return_value=mock_response
+    ) as mock_create_version:
+        result = projects_mixin.create_project_version(
+            project_key="PROJ3",
+            name="v5.0",
+            start_date="2025-08-01",
+            release_date="2025-08-15",
+            description="Release 5.0",
+        )
+        assert result == mock_response
+        mock_create_version.assert_called_once_with(
+            project="PROJ3",
+            name="v5.0",
+            start_date="2025-08-01",
+            release_date="2025-08-15",
+            description="Release 5.0",
+        )
+
+
+def test_create_project_version_error(projects_mixin: ProjectsMixin) -> None:
+    """Test create_project_version propagates errors."""
+    with patch.object(
+        projects_mixin, "create_version", side_effect=Exception("API failure")
+    ):
+        with pytest.raises(Exception):
+            projects_mixin.create_project_version("PROJ4", "v6.0")

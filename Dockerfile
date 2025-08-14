@@ -12,6 +12,7 @@ ENV UV_LINK_MODE=copy
 
 # Generate proper TOML lockfile first
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=README.md,target=README.md \
     uv lock
 
 # Install the project's dependencies using the lockfile
@@ -44,5 +45,11 @@ COPY --from=uv --chown=app:app /app/.venv /app/.venv
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
+
+# For minimal OAuth setup without environment variables, use:
+# docker run -e ATLASSIAN_OAUTH_ENABLE=true -p 8000:8000 your-image
+# Then provide authentication via headers:
+# Authorization: Bearer <your_oauth_token>
+# X-Atlassian-Cloud-Id: <your_cloud_id>
 
 ENTRYPOINT ["mcp-atlassian"]

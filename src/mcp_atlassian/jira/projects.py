@@ -5,6 +5,7 @@ from typing import Any
 
 from ..models import JiraProject
 from ..models.jira.search import JiraSearchResult
+from ..models.jira.version import JiraVersion
 from .client import JiraClient
 from .protocols import SearchOperationsProto
 
@@ -119,15 +120,20 @@ class ProjectsMixin(JiraClient, SearchOperationsProto):
         Get all versions for a project.
 
         Args:
-            project_key: The project key
+            project_key: The project key.
 
         Returns:
             List of version data dictionaries
         """
         try:
-            versions = self.jira.get_project_versions(key=project_key)
-            return versions if isinstance(versions, list) else []
-
+            raw_versions = self.jira.get_project_versions(key=project_key)
+            if not isinstance(raw_versions, list):
+                return []
+            versions: list[dict[str, Any]] = []
+            for v in raw_versions:
+                ver = JiraVersion.from_api_response(v)
+                versions.append(ver.to_simplified_dict())
+            return versions
         except Exception as e:
             logger.error(f"Error getting versions for project {project_key}: {str(e)}")
             return []
@@ -277,7 +283,7 @@ class ProjectsMixin(JiraClient, SearchOperationsProto):
         """
         try:
             # Use JQL to count issues in the project
-            jql = f"project = {project_key}"
+            jql = f'project = "{project_key}"'
             result = self.jira.jql(jql=jql, fields="key", limit=1)
             if not isinstance(result, dict):
                 msg = f"Unexpected return value type from `jira.jql`: {type(result)}"
@@ -313,7 +319,7 @@ class ProjectsMixin(JiraClient, SearchOperationsProto):
         """
         try:
             # Use JQL to get issues in the project
-            jql = f"project = {project_key}"
+            jql = f'project = "{project_key}"'
 
             return self.search_issues(jql, start=start, limit=limit)
 
@@ -427,3 +433,32 @@ class ProjectsMixin(JiraClient, SearchOperationsProto):
                 f"Error getting accessible projects for user {username}: {str(e)}"
             )
             return []
+
+    def create_project_version(
+        self,
+        project_key: str,
+        name: str,
+        start_date: str = None,
+        release_date: str = None,
+        description: str = None,
+    ) -> dict[str, Any]:
+        """
+        Create a new version in the specified Jira project.
+
+        Args:
+            project_key: The project key (e.g., 'PROJ')
+            name: The name of the version
+            start_date: The start date (YYYY-MM-DD, optional)
+            release_date: The release date (YYYY-MM-DD, optional)
+            description: Description of the version (optional)
+
+        Returns:
+            The created version object as returned by Jira
+        """
+        return self.create_version(
+            project=project_key,
+            name=name,
+            start_date=start_date,
+            release_date=release_date,
+            description=description,
+        )

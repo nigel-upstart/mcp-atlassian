@@ -41,7 +41,7 @@ def test_from_env_token_auth():
     ):
         config = JiraConfig.from_env()
         assert config.url == "https://jira.example.com"
-        assert config.auth_type == "token"
+        assert config.auth_type == "pat"
         assert config.username is None
         assert config.api_token is None
         assert config.personal_token == "test_personal_token"
@@ -111,7 +111,7 @@ def test_is_cloud():
     # Arrange & Act - Server URL
     config = JiraConfig(
         url="https://jira.example.com",
-        auth_type="token",
+        auth_type="pat",
         personal_token="test",
     )
 
@@ -121,7 +121,7 @@ def test_is_cloud():
     # Arrange & Act - Localhost URL (Data Center/Server)
     config = JiraConfig(
         url="http://localhost:8080",
-        auth_type="token",
+        auth_type="pat",
         personal_token="test",
     )
 
@@ -131,7 +131,7 @@ def test_is_cloud():
     # Arrange & Act - IP localhost URL (Data Center/Server)
     config = JiraConfig(
         url="http://127.0.0.1:8080",
-        auth_type="token",
+        auth_type="pat",
         personal_token="test",
     )
 
@@ -179,3 +179,27 @@ def test_from_env_proxy_settings():
         assert config.https_proxy == "https://jira-proxy.example.com:8443"
         assert config.socks_proxy == "socks5://user:pass@jira-proxy.example.com:1080"
         assert config.no_proxy == "localhost,127.0.0.1,.internal.example.com"
+
+
+def test_is_cloud_oauth_with_cloud_id():
+    """Test that is_cloud returns True for OAuth with cloud_id regardless of URL."""
+    from mcp_atlassian.utils.oauth import BYOAccessTokenOAuthConfig
+
+    # OAuth with cloud_id and no URL - should be Cloud
+    oauth_config = BYOAccessTokenOAuthConfig(
+        cloud_id="test-cloud-id", access_token="test-token"
+    )
+    config = JiraConfig(
+        url=None,  # URL can be None in Multi-Cloud OAuth mode
+        auth_type="oauth",
+        oauth_config=oauth_config,
+    )
+    assert config.is_cloud is True
+
+    # OAuth with cloud_id and server URL - should still be Cloud
+    config = JiraConfig(
+        url="https://jira.example.com",  # Server-like URL
+        auth_type="oauth",
+        oauth_config=oauth_config,
+    )
+    assert config.is_cloud is True

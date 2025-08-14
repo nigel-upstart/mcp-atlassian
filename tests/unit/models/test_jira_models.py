@@ -19,8 +19,11 @@ from src.mcp_atlassian.models.constants import (
 from src.mcp_atlassian.models.jira import (
     JiraComment,
     JiraIssue,
+    JiraIssueLink,
     JiraIssueLinkType,
     JiraIssueType,
+    JiraLinkedIssue,
+    JiraLinkedIssueFields,
     JiraPriority,
     JiraProject,
     JiraResolution,
@@ -558,6 +561,82 @@ class TestJiraIssue:
         assert isinstance(issue.worklog, dict)
         assert issue.worklog["total"] == 2
 
+    def test_from_api_response_with_issuelinks(self, jira_issue_data):
+        """Test creating a JiraIssue with issue links."""
+        # Augment jira_issue_data with mock issuelinks
+        mock_issuelinks_data = [
+            {
+                "id": "10000",
+                "type": {
+                    "id": "10000",
+                    "name": "Blocks",
+                    "inward": "is blocked by",
+                    "outward": "blocks",
+                },
+                "outwardIssue": {
+                    "id": "10001",
+                    "key": "PROJ-789",
+                    "self": "https://example.atlassian.net/rest/api/2/issue/10001",
+                    "fields": {
+                        "summary": "Blocked Issue",
+                        "status": {"name": "Open"},
+                        "priority": {"name": "High"},
+                        "issuetype": {"name": "Task"},
+                    },
+                },
+            },
+            {
+                "id": "10001",
+                "type": {
+                    "id": "10001",
+                    "name": "Relates to",
+                    "inward": "relates to",
+                    "outward": "relates to",
+                },
+                "inwardIssue": {
+                    "id": "10002",
+                    "key": "PROJ-111",
+                    "self": "https://example.atlassian.net/rest/api/2/issue/10002",
+                    "fields": {
+                        "summary": "Related Issue",
+                        "status": {"name": "In Progress"},
+                        "priority": {"name": "Medium"},
+                        "issuetype": {"name": "Story"},
+                    },
+                },
+            },
+        ]
+        jira_issue_data_with_links = jira_issue_data.copy()
+        # Ensure fields dictionary exists
+        if "fields" not in jira_issue_data_with_links:
+            jira_issue_data_with_links["fields"] = {}
+        jira_issue_data_with_links["fields"]["issuelinks"] = mock_issuelinks_data
+
+        issue = JiraIssue.from_api_response(
+            jira_issue_data_with_links, requested_fields="*all"
+        )
+
+        assert issue.issuelinks is not None
+        assert len(issue.issuelinks) == 2
+        assert isinstance(issue.issuelinks[0], JiraIssueLink)
+
+        # Check first link (outward)
+        assert issue.issuelinks[0].id == "10000"
+        assert issue.issuelinks[0].type is not None
+        assert issue.issuelinks[0].type.name == "Blocks"
+        assert issue.issuelinks[0].outward_issue is not None
+        assert issue.issuelinks[0].outward_issue.key == "PROJ-789"
+        assert issue.issuelinks[0].outward_issue.fields is not None
+        assert issue.issuelinks[0].outward_issue.fields.summary == "Blocked Issue"
+        assert issue.issuelinks[0].inward_issue is None
+
+        # Test simplified dict output
+        simplified = issue.to_simplified_dict()
+        assert "issuelinks" in simplified
+        assert len(simplified["issuelinks"]) == 2
+        assert simplified["issuelinks"][0]["type"]["name"] == "Blocks"
+        assert simplified["issuelinks"][0]["outward_issue"]["key"] == "PROJ-789"
+
     def test_from_api_response_with_empty_data(self):
         """Test creating a JiraIssue from empty data."""
         issue = JiraIssue.from_api_response({})
@@ -1019,6 +1098,96 @@ class TestJiraSearchResult:
         assert search_result.max_results == -1
         assert len(search_result.issues) == 1  # Assuming mock data has issues
 
+    def test_to_simplified_dict(self, jira_search_data):
+        """Test converting JiraSearchResult to a simplified dictionary."""
+        search_result = JiraSearchResult.from_api_response(jira_search_data)
+        simplified = search_result.to_simplified_dict()
+
+        # Verify the structure and basic metadata
+        assert isinstance(simplified, dict)
+        assert "total" in simplified
+        assert "start_at" in simplified
+        assert "max_results" in simplified
+        assert "issues" in simplified
+
+        # Verify metadata values
+        assert simplified["total"] == 34
+        assert simplified["start_at"] == 0
+        assert simplified["max_results"] == 5
+
+        # Verify issues array
+        assert isinstance(simplified["issues"], list)
+        assert len(simplified["issues"]) == 1
+
+        # Verify that each issue is a simplified dict (not a JiraIssue object)
+        issue = simplified["issues"][0]
+        assert isinstance(issue, dict)
+        assert issue["key"] == "PROJ-123"
+        assert issue["summary"] == "Test Issue Summary"
+
+        # Verify that the issues are properly simplified (calling to_simplified_dict on each)
+        # This ensures field filtering works properly
+        assert "id" in issue  # ID is included in simplified version
+        assert "expand" not in issue  # Should be filtered out in simplified version
+
+        # Verify that issue contains expected fields
+        assert "assignee" in issue
+        assert "created" in issue
+        assert "updated" in issue
+
+    def test_to_simplified_dict_empty_result(self):
+        """Test converting an empty JiraSearchResult to a simplified dictionary."""
+        search_result = JiraSearchResult()
+        simplified = search_result.to_simplified_dict()
+
+        assert isinstance(simplified, dict)
+        assert simplified["total"] == 0
+        assert simplified["start_at"] == 0
+        assert simplified["max_results"] == 0
+        assert simplified["issues"] == []
+
+    def test_to_simplified_dict_with_multiple_issues(self):
+        """Test converting JiraSearchResult with multiple issues to a simplified dictionary."""
+        # Create mock data with multiple issues
+        mock_data = {
+            "total": 2,
+            "startAt": 0,
+            "maxResults": 10,
+            "issues": [
+                {
+                    "id": "12345",
+                    "key": "PROJ-123",
+                    "fields": {
+                        "summary": "First Issue",
+                        "status": {"name": "In Progress"},
+                    },
+                },
+                {
+                    "id": "12346",
+                    "key": "PROJ-124",
+                    "fields": {
+                        "summary": "Second Issue",
+                        "status": {"name": "Done"},
+                    },
+                },
+            ],
+        }
+
+        search_result = JiraSearchResult.from_api_response(mock_data)
+        simplified = search_result.to_simplified_dict()
+
+        # Verify metadata
+        assert simplified["total"] == 2
+        assert simplified["start_at"] == 0
+        assert simplified["max_results"] == 10
+
+        # Verify issues
+        assert len(simplified["issues"]) == 2
+        assert simplified["issues"][0]["key"] == "PROJ-123"
+        assert simplified["issues"][0]["summary"] == "First Issue"
+        assert simplified["issues"][1]["key"] == "PROJ-124"
+        assert simplified["issues"][1]["summary"] == "Second Issue"
+
 
 class TestJiraProject:
     """Tests for the JiraProject model."""
@@ -1236,6 +1405,235 @@ class TestJiraIssueLinkType:
             simplified["self"]
             == "https://example.atlassian.net/rest/api/3/issueLinkType/10001"
         )
+
+
+class TestJiraLinkedIssueFields:
+    """Tests for the JiraLinkedIssueFields model."""
+
+    def test_from_api_response_with_valid_data(self):
+        """Test creating a JiraLinkedIssueFields from valid API data."""
+        data = {
+            "summary": "Linked Issue Summary",
+            "status": {
+                "id": "10000",
+                "name": "In Progress",
+                "statusCategory": {
+                    "id": 4,
+                    "key": "indeterminate",
+                    "name": "In Progress",
+                    "colorName": "yellow",
+                },
+            },
+            "priority": {
+                "id": "3",
+                "name": "Medium",
+                "description": "Medium priority",
+                "iconUrl": "https://example.com/medium-priority.png",
+            },
+            "issuetype": {
+                "id": "10000",
+                "name": "Task",
+                "description": "A task that needs to be done.",
+                "iconUrl": "https://example.com/task-icon.png",
+            },
+        }
+        fields = JiraLinkedIssueFields.from_api_response(data)
+        assert fields.summary == "Linked Issue Summary"
+        assert fields.status is not None
+        assert fields.status.name == "In Progress"
+        assert fields.priority is not None
+        assert fields.priority.name == "Medium"
+        assert fields.issuetype is not None
+        assert fields.issuetype.name == "Task"
+
+    def test_from_api_response_with_empty_data(self):
+        """Test creating a JiraLinkedIssueFields from empty data."""
+        fields = JiraLinkedIssueFields.from_api_response({})
+        assert fields.summary == EMPTY_STRING
+        assert fields.status is None
+        assert fields.priority is None
+        assert fields.issuetype is None
+
+    def test_to_simplified_dict(self):
+        """Test converting JiraLinkedIssueFields to a simplified dictionary."""
+        fields = JiraLinkedIssueFields(
+            summary="Linked Issue Summary",
+            status=JiraStatus(name="In Progress"),
+            priority=JiraPriority(name="Medium"),
+            issuetype=JiraIssueType(name="Task"),
+        )
+        simplified = fields.to_simplified_dict()
+        assert simplified["summary"] == "Linked Issue Summary"
+        assert simplified["status"]["name"] == "In Progress"
+        assert simplified["priority"]["name"] == "Medium"
+        assert simplified["issuetype"]["name"] == "Task"
+
+
+class TestJiraLinkedIssue:
+    """Tests for the JiraLinkedIssue model."""
+
+    def test_from_api_response_with_valid_data(self):
+        """Test creating a JiraLinkedIssue from valid API data."""
+        data = {
+            "id": "10001",
+            "key": "PROJ-456",
+            "self": "https://example.atlassian.net/rest/api/2/issue/10001",
+            "fields": {
+                "summary": "Linked Issue Summary",
+                "status": {
+                    "id": "10000",
+                    "name": "In Progress",
+                },
+                "priority": {
+                    "id": "3",
+                    "name": "Medium",
+                },
+                "issuetype": {
+                    "id": "10000",
+                    "name": "Task",
+                },
+            },
+        }
+        linked_issue = JiraLinkedIssue.from_api_response(data)
+        assert linked_issue.id == "10001"
+        assert linked_issue.key == "PROJ-456"
+        assert (
+            linked_issue.self_url
+            == "https://example.atlassian.net/rest/api/2/issue/10001"
+        )
+        assert linked_issue.fields is not None
+        assert linked_issue.fields.summary == "Linked Issue Summary"
+        assert linked_issue.fields.status is not None
+        assert linked_issue.fields.status.name == "In Progress"
+
+    def test_from_api_response_with_empty_data(self):
+        """Test creating a JiraLinkedIssue from empty data."""
+        linked_issue = JiraLinkedIssue.from_api_response({})
+        assert linked_issue.id == JIRA_DEFAULT_ID
+        assert linked_issue.key == EMPTY_STRING
+        assert linked_issue.self_url is None
+        assert linked_issue.fields is None
+
+    def test_to_simplified_dict(self):
+        """Test converting JiraLinkedIssue to a simplified dictionary."""
+        linked_issue = JiraLinkedIssue(
+            id="10001",
+            key="PROJ-456",
+            self_url="https://example.atlassian.net/rest/api/2/issue/10001",
+            fields=JiraLinkedIssueFields(
+                summary="Linked Issue Summary",
+                status=JiraStatus(name="In Progress"),
+                priority=JiraPriority(name="Medium"),
+                issuetype=JiraIssueType(name="Task"),
+            ),
+        )
+        simplified = linked_issue.to_simplified_dict()
+        assert simplified["id"] == "10001"
+        assert simplified["key"] == "PROJ-456"
+        assert (
+            simplified["self"] == "https://example.atlassian.net/rest/api/2/issue/10001"
+        )
+        assert simplified["fields"]["summary"] == "Linked Issue Summary"
+        assert simplified["fields"]["status"]["name"] == "In Progress"
+
+
+class TestJiraIssueLink:
+    """Tests for the JiraIssueLink model."""
+
+    def test_from_api_response_with_valid_data(self):
+        """Test creating a JiraIssueLink from valid API data."""
+        data = {
+            "id": "10001",
+            "type": {
+                "id": "10000",
+                "name": "Blocks",
+                "inward": "is blocked by",
+                "outward": "blocks",
+                "self": "https://example.atlassian.net/rest/api/2/issueLinkType/10000",
+            },
+            "inwardIssue": {
+                "id": "10002",
+                "key": "PROJ-789",
+                "self": "https://example.atlassian.net/rest/api/2/issue/10002",
+                "fields": {
+                    "summary": "Inward Issue Summary",
+                    "status": {
+                        "id": "10000",
+                        "name": "In Progress",
+                    },
+                },
+            },
+        }
+        issue_link = JiraIssueLink.from_api_response(data)
+        assert issue_link.id == "10001"
+        assert issue_link.type is not None
+        assert issue_link.type.name == "Blocks"
+        assert issue_link.inward_issue is not None
+        assert issue_link.inward_issue.key == "PROJ-789"
+        assert issue_link.outward_issue is None
+
+    def test_from_api_response_with_outward_issue(self):
+        """Test creating a JiraIssueLink with an outward issue."""
+        data = {
+            "id": "10001",
+            "type": {
+                "id": "10000",
+                "name": "Blocks",
+                "inward": "is blocked by",
+                "outward": "blocks",
+            },
+            "outwardIssue": {
+                "id": "10003",
+                "key": "PROJ-101",
+                "fields": {
+                    "summary": "Outward Issue Summary",
+                    "status": {
+                        "id": "10000",
+                        "name": "In Progress",
+                    },
+                },
+            },
+        }
+        issue_link = JiraIssueLink.from_api_response(data)
+        assert issue_link.id == "10001"
+        assert issue_link.type is not None
+        assert issue_link.type.name == "Blocks"
+        assert issue_link.inward_issue is None
+        assert issue_link.outward_issue is not None
+        assert issue_link.outward_issue.key == "PROJ-101"
+
+    def test_from_api_response_with_empty_data(self):
+        """Test creating a JiraIssueLink from empty data."""
+        issue_link = JiraIssueLink.from_api_response({})
+        assert issue_link.id == JIRA_DEFAULT_ID
+        assert issue_link.type is None
+        assert issue_link.inward_issue is None
+        assert issue_link.outward_issue is None
+
+    def test_to_simplified_dict(self):
+        """Test converting JiraIssueLink to a simplified dictionary."""
+        issue_link = JiraIssueLink(
+            id="10001",
+            type=JiraIssueLinkType(
+                id="10000",
+                name="Blocks",
+                inward="is blocked by",
+                outward="blocks",
+            ),
+            inward_issue=JiraLinkedIssue(
+                id="10002",
+                key="PROJ-789",
+                fields=JiraLinkedIssueFields(
+                    summary="Inward Issue Summary",
+                    status=JiraStatus(name="In Progress"),
+                ),
+            ),
+        )
+        simplified = issue_link.to_simplified_dict()
+        assert simplified["id"] == "10001"
+        assert simplified["type"]["name"] == "Blocks"
+        assert simplified["inward_issue"]["key"] == "PROJ-789"
+        assert "outward_issue" not in simplified
 
 
 class TestJiraWorklog:

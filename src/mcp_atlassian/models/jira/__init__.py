@@ -17,8 +17,14 @@ from .common import (
     JiraTimetracking,
     JiraUser,
 )
+from .forms import ProFormaForm, ProFormaFormField, ProFormaFormState
 from .issue import JiraIssue
-from .link import JiraIssueLinkType
+from .link import (
+    JiraIssueLink,
+    JiraIssueLinkType,
+    JiraLinkedIssue,
+    JiraLinkedIssueFields,
+)
 from .project import JiraProject
 from .search import JiraSearchResult
 from .workflow import JiraTransition
@@ -44,4 +50,11 @@ __all__ = [
     "JiraIssue",
     "JiraSearchResult",
     "JiraIssueLinkType",
+    "JiraIssueLink",
+    "JiraLinkedIssue",
+    "JiraLinkedIssueFields",
+    # ProForma models
+    "ProFormaForm",
+    "ProFormaFormField",
+    "ProFormaFormState",
 ]
