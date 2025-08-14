@@ -3,7 +3,7 @@
 from abc import abstractmethod
 from typing import Any, Protocol, runtime_checkable
 
-from ..models.jira import JiraIssue
+from ..models.jira import JiraIssue, ProFormaForm
 from ..models.jira.search import JiraSearchResult
 
 
@@ -23,6 +23,77 @@ class AttachmentsOperationsProto(Protocol):
 
         Returns:
             A dictionary with upload results
+        """
+
+
+class FormsOperationsProto(Protocol):
+    """Protocol defining ProForma forms operations interface."""
+
+    @abstractmethod
+    def get_issue_forms(self, issue_key: str) -> list[ProFormaForm]:
+        """
+        Get all ProForma forms associated with an issue.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+
+        Returns:
+            List of ProFormaForm objects
+        """
+
+    @abstractmethod
+    def get_form_details(self, issue_key: str, form_id: str) -> ProFormaForm | None:
+        """
+        Get detailed information about a specific ProForma form.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+            form_id: The form identifier (e.g. 'i12345')
+
+        Returns:
+            ProFormaForm object or None if not found
+        """
+
+    @abstractmethod
+    def reopen_form(self, issue_key: str, form_id: str) -> dict[str, Any]:
+        """
+        Reopen a submitted ProForma form to allow editing.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+            form_id: The form identifier (e.g. 'i12345')
+
+        Returns:
+            Response data from the API
+        """
+
+    @abstractmethod
+    def submit_form(self, issue_key: str, form_id: str) -> dict[str, Any]:
+        """
+        Submit a ProForma form after making changes.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+            form_id: The form identifier (e.g. 'i12345')
+
+        Returns:
+            Response data from the API
+        """
+
+    @abstractmethod
+    def update_form_field(
+        self, issue_key: str, field_id: str, field_value: Any
+    ) -> dict[str, Any]:
+        """
+        Update a field in a ProForma form by updating the associated Jira field.
+
+        Args:
+            issue_key: The issue key (e.g. 'PROJ-123')
+            field_id: The Jira field ID (e.g. 'customfield_10001')
+            field_value: The new value for the field
+
+        Returns:
+            Response data from the API
         """
 
 
