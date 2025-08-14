@@ -953,8 +953,6 @@ async def update_issue(
     """
     jira = await get_jira_fetcher(ctx)
     # Use fields directly as dict
-    if not isinstance(fields, dict):
-        raise ValueError("fields must be a dictionary.")
     update_fields = fields
 
     # Use additional_fields directly as dict
@@ -1747,3 +1745,313 @@ async def batch_create_versions(
             )
             results.append({"success": False, "error": str(e), "input": v})
     return json.dumps(results, indent=2, ensure_ascii=False)
+
+
+@jira_mcp.tool(tags={"jira", "read"})
+async def get_issue_proforma_forms(
+    ctx: Context,
+    issue_key: Annotated[str, Field(description="Jira issue key (e.g., 'PROJ-123')")],
+) -> str:
+    """
+    Get all ProForma forms associated with a Jira issue.
+
+    Args:
+        ctx: The FastMCP context.
+        issue_key: The issue key to get forms for.
+
+    Returns:
+        JSON string representing the list of ProForma forms, or an error object if failed.
+    """
+    jira = await get_jira_fetcher(ctx)
+    try:
+        forms = jira.get_issue_forms(issue_key)
+        forms_data = [form.to_simplified_dict() for form in forms]
+        response_data = {"success": True, "forms": forms_data, "count": len(forms)}
+    except Exception as e:
+        error_message = ""
+        log_level = logging.ERROR
+        if isinstance(e, ValueError) and "not found" in str(e).lower():
+            log_level = logging.WARNING
+            error_message = str(e)
+        elif isinstance(e, MCPAtlassianAuthenticationError):
+            error_message = f"Authentication/Permission Error: {str(e)}"
+        elif isinstance(e, OSError | HTTPError):
+            error_message = f"Network or API Error: {str(e)}"
+        else:
+            error_message = (
+                "An unexpected error occurred while fetching ProForma forms."
+            )
+            logger.exception(
+                f"Unexpected error in get_issue_proforma_forms for '{issue_key}':"
+            )
+        error_result = {
+            "success": False,
+            "error": str(e),
+            "issue_key": issue_key,
+        }
+        logger.log(
+            log_level,
+            f"get_issue_proforma_forms failed for '{issue_key}': {error_message}",
+        )
+        response_data = error_result
+    return json.dumps(response_data, indent=2, ensure_ascii=False)
+
+
+@jira_mcp.tool(tags={"jira", "read"})
+async def get_proforma_form_details(
+    ctx: Context,
+    issue_key: Annotated[str, Field(description="Jira issue key (e.g., 'PROJ-123')")],
+    form_id: Annotated[str, Field(description="ProForma form ID (e.g., 'i12345')")],
+) -> str:
+    """
+    Get detailed information about a specific ProForma form.
+
+    Args:
+        ctx: The FastMCP context.
+        issue_key: The issue key containing the form.
+        form_id: The form identifier.
+
+    Returns:
+        JSON string representing the ProForma form details, or an error object if failed.
+    """
+    jira = await get_jira_fetcher(ctx)
+    try:
+        form = jira.get_form_details(issue_key, form_id)
+        if form is None:
+            response_data = {
+                "success": False,
+                "error": f"Form {form_id} not found for issue {issue_key}",
+                "issue_key": issue_key,
+                "form_id": form_id,
+            }
+        else:
+            response_data = {"success": True, "form": form.to_simplified_dict()}
+    except Exception as e:
+        error_message = ""
+        log_level = logging.ERROR
+        if isinstance(e, ValueError) and "not found" in str(e).lower():
+            log_level = logging.WARNING
+            error_message = str(e)
+        elif isinstance(e, MCPAtlassianAuthenticationError):
+            error_message = f"Authentication/Permission Error: {str(e)}"
+        elif isinstance(e, OSError | HTTPError):
+            error_message = f"Network or API Error: {str(e)}"
+        else:
+            error_message = (
+                "An unexpected error occurred while fetching ProForma form details."
+            )
+            logger.exception(
+                f"Unexpected error in get_proforma_form_details for '{issue_key}/{form_id}':"
+            )
+        error_result = {
+            "success": False,
+            "error": str(e),
+            "issue_key": issue_key,
+            "form_id": form_id,
+        }
+        logger.log(
+            log_level,
+            f"get_proforma_form_details failed for '{issue_key}/{form_id}': {error_message}",
+        )
+        response_data = error_result
+    return json.dumps(response_data, indent=2, ensure_ascii=False)
+
+
+@jira_mcp.tool(tags={"jira", "write"})
+@check_write_access
+async def reopen_proforma_form(
+    ctx: Context,
+    issue_key: Annotated[str, Field(description="Jira issue key (e.g., 'PROJ-123')")],
+    form_id: Annotated[str, Field(description="ProForma form ID (e.g., 'i12345')")],
+) -> str:
+    """
+    Reopen a submitted ProForma form to allow editing.
+
+    This operation changes the form status from 'submitted' to 'open', allowing
+    fields like "Impacted Product/Service" that are otherwise read-only after
+    submission to be updated.
+
+    Args:
+        ctx: The FastMCP context.
+        issue_key: The issue key containing the form.
+        form_id: The form identifier.
+
+    Returns:
+        JSON string with operation result.
+    """
+    jira = await get_jira_fetcher(ctx)
+    try:
+        result = jira.reopen_form(issue_key, form_id)
+        response_data = {
+            "success": True,
+            "message": f"Successfully reopened form {form_id} for issue {issue_key}",
+            "issue_key": issue_key,
+            "form_id": form_id,
+            "result": result,
+        }
+    except Exception as e:
+        error_message = ""
+        log_level = logging.ERROR
+        if isinstance(e, ValueError) and "not found" in str(e).lower():
+            log_level = logging.WARNING
+            error_message = str(e)
+        elif isinstance(e, MCPAtlassianAuthenticationError):
+            error_message = f"Authentication/Permission Error: {str(e)}"
+        elif isinstance(e, OSError | HTTPError):
+            error_message = f"Network or API Error: {str(e)}"
+        else:
+            error_message = (
+                "An unexpected error occurred while reopening ProForma form."
+            )
+            logger.exception(
+                f"Unexpected error in reopen_proforma_form for '{issue_key}/{form_id}':"
+            )
+        error_result = {
+            "success": False,
+            "error": str(e),
+            "issue_key": issue_key,
+            "form_id": form_id,
+        }
+        logger.log(
+            log_level,
+            f"reopen_proforma_form failed for '{issue_key}/{form_id}': {error_message}",
+        )
+        response_data = error_result
+    return json.dumps(response_data, indent=2, ensure_ascii=False)
+
+
+@jira_mcp.tool(tags={"jira", "write"})
+@check_write_access
+async def submit_proforma_form(
+    ctx: Context,
+    issue_key: Annotated[str, Field(description="Jira issue key (e.g., 'PROJ-123')")],
+    form_id: Annotated[str, Field(description="ProForma form ID (e.g., 'i12345')")],
+) -> str:
+    """
+    Submit a ProForma form after making changes.
+
+    This operation finalizes the form changes and sets the form status to 'submitted'.
+    Use this after reopening a form and updating its fields.
+
+    Args:
+        ctx: The FastMCP context.
+        issue_key: The issue key containing the form.
+        form_id: The form identifier.
+
+    Returns:
+        JSON string with operation result.
+    """
+    jira = await get_jira_fetcher(ctx)
+    try:
+        result = jira.submit_form(issue_key, form_id)
+        response_data = {
+            "success": True,
+            "message": f"Successfully submitted form {form_id} for issue {issue_key}",
+            "issue_key": issue_key,
+            "form_id": form_id,
+            "result": result,
+        }
+    except Exception as e:
+        error_message = ""
+        log_level = logging.ERROR
+        if isinstance(e, ValueError) and "not found" in str(e).lower():
+            log_level = logging.WARNING
+            error_message = str(e)
+        elif isinstance(e, MCPAtlassianAuthenticationError):
+            error_message = f"Authentication/Permission Error: {str(e)}"
+        elif isinstance(e, OSError | HTTPError):
+            error_message = f"Network or API Error: {str(e)}"
+        else:
+            error_message = (
+                "An unexpected error occurred while submitting ProForma form."
+            )
+            logger.exception(
+                f"Unexpected error in submit_proforma_form for '{issue_key}/{form_id}':"
+            )
+        error_result = {
+            "success": False,
+            "error": str(e),
+            "issue_key": issue_key,
+            "form_id": form_id,
+        }
+        logger.log(
+            log_level,
+            f"submit_proforma_form failed for '{issue_key}/{form_id}': {error_message}",
+        )
+        response_data = error_result
+    return json.dumps(response_data, indent=2, ensure_ascii=False)
+
+
+@jira_mcp.tool(tags={"jira", "write"})
+@check_write_access
+async def update_proforma_form_field(
+    ctx: Context,
+    issue_key: Annotated[str, Field(description="Jira issue key (e.g., 'PROJ-123')")],
+    field_id: Annotated[
+        str,
+        Field(
+            description="Jira field ID (e.g., 'customfield_10001') linked to the ProForma form field"
+        ),
+    ],
+    field_value: Annotated[
+        str | int | float | bool | list | dict,
+        Field(description="New value for the field"),
+    ],
+) -> str:
+    """
+    Update a field in a ProForma form by updating the associated Jira custom field.
+
+    This method works by updating the Jira custom field that is linked to the
+    ProForma form field. This is often more reliable than trying to update the
+    form directly. The form should typically be reopened before making updates.
+
+    Args:
+        ctx: The FastMCP context.
+        issue_key: The issue key containing the form.
+        field_id: The Jira field ID (e.g., 'customfield_10001').
+        field_value: The new value for the field.
+
+    Returns:
+        JSON string with operation result.
+    """
+    jira = await get_jira_fetcher(ctx)
+    try:
+        result = jira.update_form_field(issue_key, field_id, field_value)
+        response_data = {
+            "success": True,
+            "message": f"Successfully updated field {field_id} for issue {issue_key}",
+            "issue_key": issue_key,
+            "field_id": field_id,
+            "field_value": field_value,
+            "result": result,
+        }
+    except Exception as e:
+        error_message = ""
+        log_level = logging.ERROR
+        if isinstance(e, ValueError) and "not found" in str(e).lower():
+            log_level = logging.WARNING
+            error_message = str(e)
+        elif isinstance(e, MCPAtlassianAuthenticationError):
+            error_message = f"Authentication/Permission Error: {str(e)}"
+        elif isinstance(e, OSError | HTTPError):
+            error_message = f"Network or API Error: {str(e)}"
+        else:
+            error_message = (
+                "An unexpected error occurred while updating ProForma form field."
+            )
+            logger.exception(
+                f"Unexpected error in update_proforma_form_field for '{issue_key}/{field_id}':"
+            )
+        error_result = {
+            "success": False,
+            "error": str(e),
+            "issue_key": issue_key,
+            "field_id": field_id,
+            "field_value": field_value,
+        }
+        logger.log(
+            log_level,
+            f"update_proforma_form_field failed for '{issue_key}/{field_id}': {error_message}",
+        )
+        response_data = error_result
+    return json.dumps(response_data, indent=2, ensure_ascii=False)

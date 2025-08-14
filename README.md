@@ -733,6 +733,10 @@ Here's a complete example of setting up multi-user authentication with streamabl
 - `jira_update_issue`: Update an existing issue
 - `jira_transition_issue`: Transition an issue to a new status
 - `jira_add_comment`: Add a comment to an issue
+- `jira_get_issue_forms`: Get ProForma forms associated with an issue
+- `jira_reopen_form`: Reopen a submitted ProForma form for editing
+- `jira_submit_form`: Submit a ProForma form after making changes
+- `jira_update_form_field`: Update ProForma form fields via linked Jira fields
 
 #### Confluence Tools
 
@@ -761,6 +765,8 @@ Here's a complete example of setting up multi-user authentication with streamabl
 |           | `jira_get_user_profile`             |                                |
 |           | `jira_download_attachments`         |                                |
 |           | `jira_get_project_versions`         |                                |
+|           | `jira_get_issue_forms`              |                                |
+|           | `jira_get_form_details`             |                                |
 | **Write** | `jira_create_issue`                 | `confluence_create_page`       |
 |           | `jira_update_issue`                 | `confluence_update_page`       |
 |           | `jira_delete_issue`                 | `confluence_delete_page`       |
@@ -775,6 +781,9 @@ Here's a complete example of setting up multi-user authentication with streamabl
 |           | `jira_remove_issue_link`            |                                |
 |           | `jira_create_version`               |                                |
 |           | `jira_batch_create_versions`        |                                |
+|           | `jira_reopen_form`                  |                                |
+|           | `jira_submit_form`                  |                                |
+|           | `jira_update_form_field`            |                                |
 
 </details>
 
