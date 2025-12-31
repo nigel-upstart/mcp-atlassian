@@ -89,10 +89,14 @@ class ProFormaFormField(ApiModel):
 class ProFormaForm(ApiModel):
     """
     Model representing a complete ProForma form.
+
+    Supports both the legacy entity properties API and the new Forms REST API.
     """
 
-    id: str = Field(description="Unique identifier of the form")
-    form_id: str = Field(description="Form ID used in API calls")
+    id: str = Field(description="Unique identifier of the form (UUID in new API)")
+    form_id: str = Field(
+        description="Form ID used in API calls (UUID in new API, 'i' prefix in old API)"
+    )
     name: str | None = Field(None, description="Display name of the form")
     description: str | None = Field(None, description="Description of the form")
     state: ProFormaFormState = Field(description="Current state of the form")
@@ -100,36 +104,89 @@ class ProFormaForm(ApiModel):
         default_factory=list, description="List of form fields"
     )
     issue_key: str | None = Field(None, description="Associated Jira issue key")
+    updated: datetime | None = Field(
+        None, description="Last updated timestamp (new API only)"
+    )
+    internal: bool | None = Field(
+        None, description="Whether form is internal only (new API only)"
+    )
+    submitted: bool | None = Field(
+        None, description="Whether form is submitted (new API only)"
+    )
+    lock: bool | None = Field(None, description="Whether form is locked (new API only)")
+    design: dict[str, Any] | None = Field(
+        None, description="ADF design data (new API only)"
+    )
 
     @classmethod
     def from_api_response(cls, data: dict[str, Any], **kwargs: Any) -> "ProFormaForm":
         """
         Create a ProFormaForm from a Jira API response.
 
+        Supports both old entity properties API and new Forms REST API formats.
+
         Args:
             data: The form data from the Jira API
-            kwargs: Additional context like issue_key
+            kwargs: Additional context like issue_key, is_new_api
 
         Returns:
             A ProFormaForm instance
         """
-        # Extract state information
-        state_data = data.get("state", {})
-        state = ProFormaFormState.from_api_response(state_data)
+        is_new_api = kwargs.get("is_new_api", False)
 
-        # Extract fields information
-        fields_data = data.get("fields", [])
-        fields = [ProFormaFormField.from_api_response(field) for field in fields_data]
+        if is_new_api:
+            # New Forms API format
+            # List response: {id, formTemplate, internal, submitted, lock, name, updated}
+            # Detail response: {id, updated, design: {conditions, layout}}
 
-        return cls(
-            id=data.get("id", ""),
-            form_id=data.get("formId", data.get("id", "")),
-            name=data.get("name"),
-            description=data.get("description"),
-            state=state,
-            fields=fields,
-            issue_key=kwargs.get("issue_key"),
-        )
+            # Try to determine status from submitted flag
+            status = "s" if data.get("submitted", False) else "o"
+            state = ProFormaFormState(
+                status=status, version=None, submitted_at=None, submitted_by=None
+            )
+
+            # Fields will be extracted from ADF layout if present
+            # For now, we'll leave fields empty and parse them separately
+            fields: list[ProFormaFormField] = []
+
+            # Store the design data for later parsing
+            design = data.get("design")
+
+            return cls(
+                id=data.get("id", ""),
+                form_id=data.get("id", ""),  # In new API, form_id is the UUID
+                name=data.get("name"),
+                description=None,  # Not in simple list response
+                state=state,
+                fields=fields,
+                issue_key=kwargs.get("issue_key"),
+                updated=data.get("updated"),
+                internal=data.get("internal"),
+                submitted=data.get("submitted"),
+                lock=data.get("lock"),
+                design=design,
+            )
+        else:
+            # Legacy entity properties API format
+            # Extract state information
+            state_data = data.get("state", {})
+            state = ProFormaFormState.from_api_response(state_data)
+
+            # Extract fields information
+            fields_data = data.get("fields", [])
+            fields = [
+                ProFormaFormField.from_api_response(field) for field in fields_data
+            ]
+
+            return cls(
+                id=data.get("id", ""),
+                form_id=data.get("formId", data.get("id", "")),
+                name=data.get("name"),
+                description=data.get("description"),
+                state=state,
+                fields=fields,
+                issue_key=kwargs.get("issue_key"),
+            )
 
     def is_open(self) -> bool:
         """Check if the form is in an open state."""

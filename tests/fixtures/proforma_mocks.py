@@ -1,124 +1,162 @@
-"""Mock data for ProForma forms testing."""
+"""Mock data for ProForma forms testing - New Forms REST API."""
 
-# Mock ProForma form state data
-MOCK_PROFORMA_FORM_STATE_OPEN = {
-    "status": "o",  # open
-    "version": "1.0",
-    "submittedAt": None,
-    "submittedBy": None,
-}
+# ============================================================================
+# FORMS REST API FIXTURES
+# ============================================================================
 
-MOCK_PROFORMA_FORM_STATE_SUBMITTED = {
-    "status": "s",  # submitted
-    "version": "1.0",
-    "submittedAt": "2025-01-01T10:00:00Z",
-    "submittedBy": "test-user@example.com",
-}
+# Mock UUIDs for forms (new API format)
+MOCK_FORM_UUID_1 = "1946b8b7-8f03-4dc0-ac2d-5fac0d960c6a"
+MOCK_FORM_UUID_2 = "bad2fb1f-3e2d-4a1c-9f8e-7b6c5d4e3f2a"
+MOCK_FORM_UUID_3 = "e4644a12-7c3b-4d9e-a1f0-2b3c4d5e6f7g"
 
-# Mock ProForma form field data
-MOCK_PROFORMA_FORM_FIELD_TEXT = {
-    "id": "customfield_10001",
-    "name": "Text Field",
-    "type": "text",
-    "value": "Sample text value",
-    "required": True,
-    "readOnly": False,
-    "description": "A sample text field",
-}
+# Mock CloudId
+MOCK_CLOUD_ID = "d30daf5c-29ad-4817-bd10-bdd85ae8455f"
 
-MOCK_PROFORMA_FORM_FIELD_SELECT = {
-    "id": "customfield_10002",
-    "name": "Impacted Product/Service",
-    "type": "select",
-    "value": "Product A",
-    "required": True,
-    "readOnly": True,  # Typically read-only after submission
-    "options": ["Product A", "Product B", "Service X", "Service Y"],
-    "description": "Select the impacted product or service",
-}
-
-MOCK_PROFORMA_FORM_FIELD_CHECKBOX = {
-    "id": "customfield_10003",
-    "name": "Urgent Priority",
-    "type": "checkbox",
-    "value": False,
-    "required": False,
-    "readOnly": False,
-    "description": "Check if this is urgent",
-}
-
-# Mock complete ProForma form data
-MOCK_PROFORMA_FORM_OPEN = {
-    "id": "form_12345",
-    "formId": "i12345",
-    "name": "Service Request Form",
-    "description": "Form for service requests and incidents",
-    "state": MOCK_PROFORMA_FORM_STATE_OPEN,
-    "fields": [
-        MOCK_PROFORMA_FORM_FIELD_TEXT,
-        MOCK_PROFORMA_FORM_FIELD_SELECT,
-        MOCK_PROFORMA_FORM_FIELD_CHECKBOX,
-    ],
-    "issueKey": "PROJ-123",
-    "version": 1,
-    "created": "2025-01-01T09:00:00Z",
-    "updated": "2025-01-01T09:30:00Z",
-    "_links": {
-        "self": "https://test.atlassian.net/rest/api/3/issue/PROJ-123/properties/proforma.forms.i12345",
-        "webui": "https://test.atlassian.net/browse/PROJ-123",
+# Mock form list response (GET /issue/{key}/form)
+MOCK_NEW_API_FORMS_LIST = [
+    {
+        "id": MOCK_FORM_UUID_1,
+        "formTemplate": "template-uuid-123",
+        "internal": False,
+        "submitted": False,
+        "lock": False,
+        "name": "1. Reporter - Fields Submitted At Intake",
+        "updated": "2025-01-15T10:30:00.000Z",
     },
-}
+    {
+        "id": MOCK_FORM_UUID_2,
+        "formTemplate": "template-uuid-456",
+        "internal": False,
+        "submitted": True,
+        "lock": False,
+        "name": "0. Status Update",
+        "updated": "2025-01-14T15:20:00.000Z",
+    },
+    {
+        "id": MOCK_FORM_UUID_3,
+        "formTemplate": "template-uuid-789",
+        "internal": True,
+        "submitted": False,
+        "lock": False,
+        "name": "2. Issue Management/Compliance Triage Form",
+        "updated": "2025-01-13T09:15:00.000Z",
+    },
+]
 
-MOCK_PROFORMA_FORM_SUBMITTED = {
-    "id": "form_67890",
-    "formId": "i67890",
-    "name": "Change Request Form",
-    "description": "Form for change requests",
-    "state": MOCK_PROFORMA_FORM_STATE_SUBMITTED,
-    "fields": [
+# Mock ADF design structure (simplified for testing)
+MOCK_ADF_DESIGN = {
+    "conditions": {"version": 1, "rules": []},
+    "layout": [
         {
-            **MOCK_PROFORMA_FORM_FIELD_SELECT,
-            "value": "Service Y",
-            "readOnly": True,
+            "type": "panel",
+            "attrs": {"panelType": "info"},
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {"type": "text", "text": "Please provide detailed information"}
+                    ],
+                }
+            ],
         },
         {
-            **MOCK_PROFORMA_FORM_FIELD_CHECKBOX,
-            "value": True,
+            "type": "question",
+            "attrs": {"questionId": "q1", "questionType": "TEXT"},
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "Description"}],
+                }
+            ],
         },
     ],
-    "issueKey": "PROJ-456",
-    "version": 1,
-    "created": "2025-01-01T08:00:00Z",
-    "updated": "2025-01-01T10:00:00Z",
-    "_links": {
-        "self": "https://test.atlassian.net/rest/api/3/issue/PROJ-456/properties/proforma.forms.i67890",
-        "webui": "https://test.atlassian.net/browse/PROJ-456",
+    "questions": {
+        "q1": {"id": "q1", "type": "TEXT", "required": True, "label": "Description"},
+        "q2": {
+            "id": "q2",
+            "type": "SELECT",
+            "required": True,
+            "label": "Impacted Product/Service",
+            "options": ["Product A", "Product B", "Service X", "Service Y"],
+        },
     },
+    "sections": [],
+    "settings": {"version": 1},
 }
 
-# Mock API responses for ProForma operations
-MOCK_ISSUE_FORMS_RESPONSE = {
-    "value": {
-        "i12345": MOCK_PROFORMA_FORM_OPEN,
-        "i67890": MOCK_PROFORMA_FORM_SUBMITTED,
-    }
+# Mock form details response (GET /issue/{key}/form/{formId})
+MOCK_NEW_API_FORM_DETAILS = {
+    "id": MOCK_FORM_UUID_1,
+    "updated": "2025-01-15T10:30:00.000Z",
+    "design": MOCK_ADF_DESIGN,
 }
 
-MOCK_FORM_DETAILS_RESPONSE = {"value": MOCK_PROFORMA_FORM_OPEN}
-
-MOCK_FORM_REOPEN_RESPONSE = {
-    "status": "success",
-    "message": "Form reopened successfully",
+# Mock form with submission
+MOCK_NEW_API_FORM_SUBMITTED = {
+    "id": MOCK_FORM_UUID_2,
+    "formTemplate": "template-uuid-456",
+    "internal": False,
+    "submitted": True,
+    "lock": False,
+    "name": "0. Status Update",
+    "updated": "2025-01-14T15:20:00.000Z",
 }
 
-MOCK_FORM_SUBMIT_RESPONSE = {
-    "status": "success",
-    "message": "Form submitted successfully",
+# Mock update answers request/response (PUT /issue/{key}/form/{formId})
+MOCK_UPDATE_ANSWERS_REQUEST = {
+    "answers": [
+        {"questionId": "q1", "type": "TEXT", "value": "Updated description text"},
+        {"questionId": "q2", "type": "SELECT", "value": "Product A"},
+    ]
 }
 
-MOCK_FIELD_UPDATE_RESPONSE = {
-    "status": "success",
-    "message": "Field updated successfully",
+MOCK_UPDATE_ANSWERS_RESPONSE = {
+    "success": True,
+    "message": "Form answers updated successfully",
+}
+
+# Mock add template request/response (POST /issue/{key}/form)
+MOCK_ADD_TEMPLATE_REQUEST = {"formTemplateId": "template-uuid-999"}
+
+MOCK_ADD_TEMPLATE_RESPONSE = {
+    "id": "new-form-uuid-abc",
+    "formTemplate": "template-uuid-999",
+    "internal": False,
+    "submitted": False,
+    "lock": False,
+    "name": "New Form from Template",
+    "updated": "2025-01-16T11:00:00.000Z",
+}
+
+# Mock attachments response (GET /issue/{key}/form/{formId}/attachment)
+MOCK_FORM_ATTACHMENTS = [
+    {
+        "id": "attachment-uuid-1",
+        "filename": "document.pdf",
+        "size": 102400,
+        "mimeType": "application/pdf",
+        "created": "2025-01-15T10:35:00.000Z",
+    },
+    {
+        "id": "attachment-uuid-2",
+        "filename": "screenshot.png",
+        "size": 524288,
+        "mimeType": "image/png",
+        "created": "2025-01-15T10:40:00.000Z",
+    },
+]
+
+# API endpoint patterns for new Forms REST API
+FORMS_REST_API_PATTERNS = {
+    "base": "https://api.atlassian.com/jira/forms/cloud/{cloud_id}",
+    "get_issue_forms": "/issue/{issue_key}/form",
+    "get_form_details": "/issue/{issue_key}/form/{form_id}",
+    "update_form_answers": "/issue/{issue_key}/form/{form_id}",  # PUT
+    "add_form_template": "/issue/{issue_key}/form",  # POST
+    "delete_form": "/issue/{issue_key}/form/{form_id}",  # DELETE
+    "get_attachments": "/issue/{issue_key}/form/{form_id}/attachment",
+    "export_pdf": "/issue/{issue_key}/form/{form_id}/format/pdf",
+    "export_xlsx": "/issue/{issue_key}/form/{form_id}/format/xlsx",
 }
 
 # Mock error responses
@@ -131,93 +169,11 @@ MOCK_FORM_NOT_FOUND_ERROR = {
 MOCK_FORM_PERMISSION_ERROR = {
     "status_code": 403,
     "message": "Insufficient permissions",
-    "errors": [{"message": "You do not have permission to modify this form"}],
+    "errors": [{"message": "You do not have permission to access this form"}],
 }
 
 MOCK_FORM_VALIDATION_ERROR = {
     "status_code": 400,
     "message": "Validation error",
-    "errors": [{"message": "Required field is missing"}],
-}
-
-# Mock simplified representations for MCP tool responses
-MOCK_PROFORMA_FORMS_SIMPLIFIED = {
-    "success": True,
-    "forms": [
-        {
-            "form_id": "i12345",
-            "name": "Service Request Form",
-            "status": "open",
-            "issue_key": "PROJ-123",
-            "field_count": 3,
-            "has_required_fields": True,
-            "is_submitted": False,
-            "is_open": True,
-        },
-        {
-            "form_id": "i67890",
-            "name": "Change Request Form",
-            "status": "submitted",
-            "issue_key": "PROJ-456",
-            "field_count": 2,
-            "has_required_fields": True,
-            "is_submitted": True,
-            "is_open": False,
-            "submitted_at": "2025-01-01T10:00:00Z",
-            "submitted_by": "test-user@example.com",
-        },
-    ],
-    "count": 2,
-}
-
-MOCK_PROFORMA_FORM_DETAILS_SIMPLIFIED = {
-    "success": True,
-    "form": {
-        "form_id": "i12345",
-        "name": "Service Request Form",
-        "description": "Form for service requests and incidents",
-        "status": "open",
-        "issue_key": "PROJ-123",
-        "fields": [
-            {
-                "id": "customfield_10001",
-                "name": "Text Field",
-                "type": "text",
-                "value": "Sample text value",
-                "required": True,
-                "read_only": False,
-            },
-            {
-                "id": "customfield_10002",
-                "name": "Impacted Product/Service",
-                "type": "select",
-                "value": "Product A",
-                "required": True,
-                "read_only": True,
-                "options": ["Product A", "Product B", "Service X", "Service Y"],
-            },
-            {
-                "id": "customfield_10003",
-                "name": "Urgent Priority",
-                "type": "checkbox",
-                "value": False,
-                "required": False,
-                "read_only": False,
-            },
-        ],
-        "is_submitted": False,
-        "is_open": True,
-        "version": 1,
-        "created": "2025-01-01T09:00:00Z",
-        "updated": "2025-01-01T09:30:00Z",
-    },
-}
-
-# API endpoint patterns for mocking
-PROFORMA_API_PATTERNS = {
-    "get_issue_forms": "rest/api/3/issue/{issue_key}/properties/proforma.forms",
-    "get_form_details": "rest/api/3/issue/{issue_key}/properties/proforma.forms.{form_id}",
-    "reopen_form": "rest/api/3/issue/{issue_key}/properties/proforma.forms.{form_id}",
-    "submit_form": "rest/api/3/issue/{issue_key}/properties/proforma.forms.{form_id}/submit",
-    "update_field": "rest/api/3/issue/{issue_key}",
+    "errors": [{"message": "Required field is missing or invalid"}],
 }
