@@ -5,9 +5,9 @@ from typing import Any
 
 from requests.exceptions import HTTPError
 
-from ..exceptions import MCPAtlassianAuthenticationError
 from ..models.jira import ProFormaForm
 from .client import JiraClient
+from .forms_common import handle_forms_http_error
 
 logger = logging.getLogger("mcp-jira")
 
@@ -57,8 +57,7 @@ class FormsMixin(JiraClient):
             if e.response.status_code == 404:
                 # No forms found for this issue
                 return []
-            error_msg = f"HTTP error getting forms: {str(e)}"
-            raise Exception(error_msg) from e
+            raise handle_forms_http_error(e, "getting forms", issue_key) from e
         except Exception as e:
             logger.error(f"Error getting forms for issue {issue_key}: {str(e)}")
             error_msg = f"Error getting forms: {str(e)}"
@@ -101,8 +100,9 @@ class FormsMixin(JiraClient):
         except HTTPError as e:
             if e.response.status_code == 404:
                 return None
-            error_msg = f"HTTP error getting form details: {str(e)}"
-            raise Exception(error_msg) from e
+            raise handle_forms_http_error(
+                e, "getting form details", f"{issue_key}/{form_id}"
+            ) from e
         except Exception as e:
             logger.error(
                 f"Error getting form details for {issue_key}/{form_id}: {str(e)}"
@@ -135,17 +135,12 @@ class FormsMixin(JiraClient):
             )
 
             logger.info(f"Successfully reopened form {form_id} for issue {issue_key}")
-            return response
+            return response if isinstance(response, dict) else {}
 
         except HTTPError as e:
-            if e.response.status_code == 403:
-                error_msg = f"Insufficient permissions to reopen form {form_id}"
-                raise MCPAtlassianAuthenticationError(error_msg) from e
-            elif e.response.status_code == 404:
-                error_msg = f"Form {form_id} not found for issue {issue_key}"
-                raise ValueError(error_msg) from e
-            error_msg = f"HTTP error reopening form: {str(e)}"
-            raise Exception(error_msg) from e
+            raise handle_forms_http_error(
+                e, "reopening form", f"{issue_key}/{form_id}"
+            ) from e
         except Exception as e:
             logger.error(
                 f"Error reopening form {form_id} for issue {issue_key}: {str(e)}"
@@ -174,17 +169,12 @@ class FormsMixin(JiraClient):
             )
 
             logger.info(f"Successfully submitted form {form_id} for issue {issue_key}")
-            return response
+            return response if isinstance(response, dict) else {}
 
         except HTTPError as e:
-            if e.response.status_code == 403:
-                error_msg = f"Insufficient permissions to submit form {form_id}"
-                raise MCPAtlassianAuthenticationError(error_msg) from e
-            elif e.response.status_code == 404:
-                error_msg = f"Form {form_id} not found for issue {issue_key}"
-                raise ValueError(error_msg) from e
-            error_msg = f"HTTP error submitting form: {str(e)}"
-            raise Exception(error_msg) from e
+            raise handle_forms_http_error(
+                e, "submitting form", f"{issue_key}/{form_id}"
+            ) from e
         except Exception as e:
             logger.error(
                 f"Error submitting form {form_id} for issue {issue_key}: {str(e)}"
@@ -221,17 +211,12 @@ class FormsMixin(JiraClient):
             response = self.jira.put(f"rest/api/3/issue/{issue_key}", data=update_data)
 
             logger.info(f"Successfully updated field {field_id} for issue {issue_key}")
-            return response
+            return response if isinstance(response, dict) else {}
 
         except HTTPError as e:
-            if e.response.status_code == 403:
-                error_msg = f"Insufficient permissions to update field {field_id}"
-                raise MCPAtlassianAuthenticationError(error_msg) from e
-            elif e.response.status_code == 404:
-                error_msg = f"Issue {issue_key} not found"
-                raise ValueError(error_msg) from e
-            error_msg = f"HTTP error updating field: {str(e)}"
-            raise Exception(error_msg) from e
+            raise handle_forms_http_error(
+                e, "updating field", f"{issue_key}/{field_id}"
+            ) from e
         except Exception as e:
             logger.error(
                 f"Error updating field {field_id} for issue {issue_key}: {str(e)}"

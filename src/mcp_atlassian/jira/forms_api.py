@@ -17,9 +17,9 @@ import requests
 from requests.auth import HTTPBasicAuth
 from requests.exceptions import HTTPError
 
-from ..exceptions import MCPAtlassianAuthenticationError
 from ..models.jira import ProFormaForm
 from .client import JiraClient
+from .forms_common import handle_forms_http_error
 
 logger = logging.getLogger("mcp-jira")
 
@@ -48,7 +48,7 @@ class FormsApiMixin(JiraClient):
         method: str,
         endpoint: str,
         data: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | list[dict[str, Any]]:
+    ) -> dict[str, Any]:
         """Make a request to the Forms API.
 
         Args:
@@ -57,15 +57,19 @@ class FormsApiMixin(JiraClient):
             data: Optional request body data
 
         Returns:
-            Response data from the API
+            Response data from the API as a dictionary
 
         Raises:
-            Exception: If there is an error making the request
+            MCPAtlassianAuthenticationError: For 403 permission errors
+            ValueError: For 404 not found errors
+            Exception: For other HTTP errors
         """
         url = f"{self._forms_api_base}{endpoint}"
 
-        # Get credentials from the existing jira client
-        auth = HTTPBasicAuth(self.jira.username, self.jira.password)
+        # Get credentials from the existing jira client - ensure non-None values
+        username = self.jira.username or ""
+        password = self.jira.password or ""
+        auth = HTTPBasicAuth(username, password)
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
         try:
@@ -83,20 +87,18 @@ class FormsApiMixin(JiraClient):
             if not response.content:
                 return {}
 
-            return response.json()
+            json_response: dict[str, Any] = response.json()
+            return json_response
 
         except HTTPError as e:
-            if e.response.status_code == 403:
-                error_msg = f"Insufficient permissions for Forms API: {endpoint}"
-                raise MCPAtlassianAuthenticationError(error_msg) from e
-            elif e.response.status_code == 404:
-                error_msg = f"Resource not found: {endpoint}"
-                raise ValueError(error_msg) from e
-            error_msg = f"HTTP error in Forms API: {str(e)}"
-            logger.error(f"{error_msg} - Response: {e.response.text[:500]}")
-            raise Exception(error_msg) from e
-        except Exception as e:
-            logger.error(f"Error making Forms API request to {endpoint}: {str(e)}")
+            logger.error(
+                f"HTTP error in Forms API: {e} - Response: {e.response.text[:500]}"
+            )
+            raise handle_forms_http_error(e, "Forms API request", endpoint) from e
+        except requests.RequestException as e:
+            logger.error(
+                f"Request error making Forms API request to {endpoint}: {str(e)}"
+            )
             raise
 
     def get_issue_forms(self, issue_key: str) -> list[ProFormaForm]:
@@ -115,14 +117,11 @@ class FormsApiMixin(JiraClient):
             # Use the new Forms API endpoint
             response = self._make_forms_api_request("GET", f"/issue/{issue_key}/form")
 
-            if not isinstance(response, list):
-                logger.warning(
-                    f"Unexpected response type from Forms API: {type(response)}"
-                )
-                return []
+            # API should return a list wrapped in a forms key
+            forms_data = response.get("forms", []) if isinstance(response, dict) else []
 
             forms = []
-            for form_data in response:
+            for form_data in forms_data:
                 try:
                     # The new API returns a simplified list format
                     # We'll need to fetch details for each form to get full data
@@ -130,7 +129,7 @@ class FormsApiMixin(JiraClient):
                         form_data, issue_key=issue_key, is_new_api=True
                     )
                     forms.append(form)
-                except Exception as e:
+                except (KeyError, TypeError, ValueError) as e:
                     logger.error(f"Error parsing form data: {str(e)}")
                     continue
 
@@ -160,10 +159,6 @@ class FormsApiMixin(JiraClient):
             response = self._make_forms_api_request(
                 "GET", f"/issue/{issue_key}/form/{form_id}"
             )
-
-            if not isinstance(response, dict):
-                logger.error(f"Unexpected response type: {type(response)}")
-                return None
 
             # The new API returns ADF (Atlassian Document Format) structure
             form = ProFormaForm.from_api_response(
@@ -313,10 +308,12 @@ class FormsApiMixin(JiraClient):
                 "GET", f"/issue/{issue_key}/form/{form_id}/attachment"
             )
 
-            if not isinstance(response, list):
+            # API should return attachments wrapped in an 'attachments' key
+            attachments = response.get("attachments", [])
+            if not isinstance(attachments, list):
                 return []
 
-            return response
+            return attachments
 
         except ValueError:
             # 404 - no attachments
@@ -339,15 +336,22 @@ class FormsApiMixin(JiraClient):
             Exception: If there is an error exporting the form
         """
         url = f"{self._forms_api_base}/issue/{issue_key}/form/{form_id}/format/pdf"
-        auth = HTTPBasicAuth(self.jira.username, self.jira.password)
+        username = self.jira.username or ""
+        password = self.jira.password or ""
+        auth = HTTPBasicAuth(username, password)
 
         try:
             response = requests.get(url, auth=auth, timeout=60)
             response.raise_for_status()
             return response.content
 
-        except Exception as e:
+        except HTTPError as e:
             logger.error(f"Error exporting form {form_id} as PDF: {str(e)}")
+            raise handle_forms_http_error(
+                e, "exporting PDF", f"{issue_key}/{form_id}"
+            ) from e
+        except requests.RequestException as e:
+            logger.error(f"Request error exporting form {form_id} as PDF: {str(e)}")
             raise
 
     def export_form_xlsx(self, issue_key: str, form_id: str) -> bytes:
@@ -364,13 +368,20 @@ class FormsApiMixin(JiraClient):
             Exception: If there is an error exporting the form
         """
         url = f"{self._forms_api_base}/issue/{issue_key}/form/{form_id}/format/xlsx"
-        auth = HTTPBasicAuth(self.jira.username, self.jira.password)
+        username = self.jira.username or ""
+        password = self.jira.password or ""
+        auth = HTTPBasicAuth(username, password)
 
         try:
             response = requests.get(url, auth=auth, timeout=60)
             response.raise_for_status()
             return response.content
 
-        except Exception as e:
+        except HTTPError as e:
             logger.error(f"Error exporting form {form_id} as XLSX: {str(e)}")
+            raise handle_forms_http_error(
+                e, "exporting XLSX", f"{issue_key}/{form_id}"
+            ) from e
+        except requests.RequestException as e:
+            logger.error(f"Request error exporting form {form_id} as XLSX: {str(e)}")
             raise

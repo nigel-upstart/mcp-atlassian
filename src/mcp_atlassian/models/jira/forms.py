@@ -136,7 +136,8 @@ class ProFormaForm(ApiModel):
 
         if is_new_api:
             # New Forms API format
-            # List response: {id, formTemplate, internal, submitted, lock, name, updated}
+            # List response: {id, formTemplate, internal, submitted, lock, name,
+            # updated}
             # Detail response: {id, updated, design: {conditions, layout}}
 
             # Try to determine status from submitted flag
@@ -186,6 +187,11 @@ class ProFormaForm(ApiModel):
                 state=state,
                 fields=fields,
                 issue_key=kwargs.get("issue_key"),
+                updated=None,
+                internal=None,
+                submitted=None,
+                lock=None,
+                design=None,
             )
 
     def is_open(self) -> bool:
