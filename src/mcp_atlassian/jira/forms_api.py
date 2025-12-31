@@ -203,7 +203,38 @@ class FormsApiMixin(JiraClient):
             Exception: If there is an error updating the form
         """
         try:
-            request_body = {"answers": answers}
+            # Transform answers from list format to the API's expected object format
+            # API expects: {"answers": {"questionId": {"type": value}, ...}}
+            # We receive: [{"questionId": "1", "type": "TEXT", "value": "foo"}, ...]
+            answers_dict = {}
+            for answer in answers:
+                question_id = answer.get("questionId")
+                answer_type = answer.get("type", "TEXT")
+                value = answer.get("value")
+
+                # Map answer types to API field names
+                type_mapping = {
+                    "TEXT": "text",
+                    "NUMBER": "number",
+                    "DATE": "date",
+                    "DATETIME": "date",
+                    "TIME": "time",
+                    "SELECT": "choices",
+                    "MULTI_SELECT": "choices",
+                    "CHECKBOX": "choices",
+                    "USER": "users",
+                    "MULTI_USER": "users",
+                }
+
+                field_name = type_mapping.get(answer_type, "text")
+
+                # For choices/users, ensure value is an array
+                if field_name in ("choices", "users") and not isinstance(value, list):
+                    value = [value] if value else []
+
+                answers_dict[question_id] = {field_name: value}
+
+            request_body = {"answers": answers_dict}
 
             response = self._make_forms_api_request(
                 "PUT", f"/issue/{issue_key}/form/{form_id}", data=request_body
