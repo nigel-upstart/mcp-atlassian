@@ -733,10 +733,36 @@ Here's a complete example of setting up multi-user authentication with streamabl
 - `jira_update_issue`: Update an existing issue
 - `jira_transition_issue`: Transition an issue to a new status
 - `jira_add_comment`: Add a comment to an issue
-- `jira_get_issue_forms`: Get ProForma forms associated with an issue
-- `jira_reopen_form`: Reopen a submitted ProForma form for editing
-- `jira_submit_form`: Submit a ProForma form after making changes
-- `jira_update_form_field`: Update ProForma form fields via linked Jira fields
+- `jira_get_issue_proforma_forms`: Get ProForma forms associated with an issue
+- `jira_get_proforma_form_details`: Get detailed form structure including questions and design
+- `jira_update_proforma_form_answers`: Update form field answers (supports TEXT, NUMBER, DATETIME, SELECT, etc.)
+
+##### ProForma Forms Support
+
+MCP Atlassian includes support for ProForma forms (Jira Cloud):
+
+- **Get Forms**: Retrieve all forms attached to an issue
+- **Get Details**: Access form structure, questions, and current answers
+- **Update Answers**: Modify form field values programmatically
+
+**Important Notes:**
+- **DateTime Format**: Datetime fields require Unix timestamps in milliseconds (e.g., `1734465600000` for 2024-12-17T11:00:00 PST)
+- **Field Types**: Supports TEXT, NUMBER, DATE, DATETIME, SELECT, MULTI_SELECT, CHECKBOX, USER, and more
+- **Answer Format**: Each answer requires `questionId`, `type`, and `value` matching the field specification
+
+**Example Usage:**
+```python
+# Update multiple form fields
+jira_update_proforma_form_answers(
+    issue_key="PROJ-123",
+    form_id="1946b8b7-8f03-4dc0-ac2d-5fac0d960c6a",
+    answers=[
+        {"questionId": "27", "type": "NUMBER", "value": 127},
+        {"questionId": "46", "type": "TEXT", "value": "Detailed timeline..."},
+        {"questionId": "56", "type": "DATETIME", "value": 1734465600000}
+    ]
+)
+```
 
 #### Confluence Tools
 
@@ -765,8 +791,8 @@ Here's a complete example of setting up multi-user authentication with streamabl
 |           | `jira_get_user_profile`             |                                |
 |           | `jira_download_attachments`         |                                |
 |           | `jira_get_project_versions`         |                                |
-|           | `jira_get_issue_forms`              |                                |
-|           | `jira_get_form_details`             |                                |
+|           | `jira_get_issue_proforma_forms`     |                                |
+|           | `jira_get_proforma_form_details`    |                                |
 | **Write** | `jira_create_issue`                 | `confluence_create_page`       |
 |           | `jira_update_issue`                 | `confluence_update_page`       |
 |           | `jira_delete_issue`                 | `confluence_delete_page`       |
@@ -781,9 +807,7 @@ Here's a complete example of setting up multi-user authentication with streamabl
 |           | `jira_remove_issue_link`            |                                |
 |           | `jira_create_version`               |                                |
 |           | `jira_batch_create_versions`        |                                |
-|           | `jira_reopen_form`                  |                                |
-|           | `jira_submit_form`                  |                                |
-|           | `jira_update_form_field`            |                                |
+|           | `jira_update_proforma_form_answers` |                                |
 
 </details>
 
